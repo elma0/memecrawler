@@ -38,25 +38,19 @@ public class Crawler {
         httpClient.uri(message)
                 .responseSingle((response, body) -> {
                     if (response.responseHeaders().get("Content-Type").startsWith("image")) {
-                        return Mono.zip(Mono.just(message), Mono.defer(body::asByteArray));
+                        return Mono.defer(body::asByteArray);
                     }
-                    return Mono.zip(Mono.empty(), Mono.empty());
+                    return Mono.empty();
                 }).toFuture()
                 .whenComplete((img, err) -> {
-                    if (img != null && !img.getT1().isEmpty()) {
-                        LW.wrap(() -> {
-                            Path p;
-                            String name = img.getT1().substring(img.getT1().lastIndexOf("/") + 1);
-                            if (name.isEmpty()) {
-                                p = Paths.get(img.getT1() + ".img");
-                            } else {
-                                p = Paths.get(name);
-                            }
-                            //TODO: copy to cdn, rewrite file address url
-                            Files.write(p, img.getT2(), StandardOpenOption.CREATE);
+                    if (img.length > 0) {
+                        int pos = message.lastIndexOf("/");
+                        if (pos > 0) {
+                            Path p = Paths.get(message.substring(pos + 1));
+                            LW.wrap(() -> Files.write(p, img, StandardOpenOption.CREATE));
                             imageRepo.insert(new ImageInfo(p.getFileName().toString(), p.toAbsolutePath().toString()));
                             LOG.info("File {} written", p.toAbsolutePath());
-                        });
+                        }
                     }
                 });
     }

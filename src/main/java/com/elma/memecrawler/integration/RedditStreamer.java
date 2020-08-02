@@ -1,5 +1,6 @@
 package com.elma.memecrawler.integration;
 
+import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -19,12 +20,16 @@ import com.elma.memecrawler.integration.model.RedditData;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 
 import reactor.netty.http.client.HttpClient;
 
 @Service
 public class RedditStreamer implements Streamer {
     private static final Logger LOG = LoggerFactory.getLogger(RedditStreamer.class);
+    private final BloomFilter<CharSequence> bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF-8")),
+            1000_000_000L);
     private final HttpClient.ResponseReceiver<?> client;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -66,7 +71,11 @@ public class RedditStreamer implements Streamer {
         RedditContent content = om.readValue(contentAsString, RedditContent.class);
         if (content.data() != null && content.data().children() != null) {
             for (RedditContent childContent : content.data().children()) {
-                kafkaTemplate.send(TOPIC, childContent.data().url());
+                String url = childContent.data().url();
+                if (bloomFilter.mightContain(url)) {
+                    kafkaTemplate.send(TOPIC, childContent.data().url());
+                }
+                bloomFilter.put(url);
             }
         }
         return content;
