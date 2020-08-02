@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC "-//Puppy Crawl//DTD Check Configuration 1.2//EN"
+        "http://www.puppycrawl.com/dtds/configuration_1_2.dtd">
+<module name="Checker">
+    <module name="FileTabCharacter"/>
+    <module name="SuppressWarningsFilter"/>
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="LF_CR_CRLF"/>
+        <property name="fileExtensions" value="java"/>
+    </module>
+    <module name="TreeWalker">
+        <module name="ConstantName"/>
+        <module name="LocalFinalVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="MethodName"/>
+        <module name="PackageName"/>
+        <module name="ParameterName"/>
+        <module name="StaticVariableName"/>
+        <module name="TypeName"/>
+        <module name="AvoidStarImport"/>
+        <module name="IllegalImport">
+            <property name="illegalClasses" value="com.google.common.base.Function"/>
+        </module>
+        <module name="RedundantImport"/>
+        <!--module name="UnusedImports" doesn't work for java14/-->
+        <module name="ImportOrder">
+            <property name="groups" value="java, javax, org, com, net"/>
+            <property name="ordered" value="true"/>
+            <property name="separated" value="true"/>
+            <property name="option" value="top"/>
+        </module>
+        <module name="EmptyForIteratorPad"/>
+        <module name="GenericWhitespace"/>
+        <module name="MethodParamPad"/>
+        <module name="NoWhitespaceAfter">
+            <property name="tokens" value="BNOT, DEC, DOT, INC, LNOT, UNARY_MINUS, UNARY_PLUS"/>
+        </module>
+        <module name="OperatorWrap"/>
+        <module name="NoWhitespaceBefore"/>
+        <module name="ParenPad"/>
+        <module name="WhitespaceAfter"/>
+        <module name="TypecastParenPad"/>
+        <module name="WhitespaceAround">
+            <property name="tokens"
+                      value="ASSIGN, BAND, BAND_ASSIGN, BOR, BOR_ASSIGN, BSR, BSR_ASSIGN, BXOR, BXOR_ASSIGN, COLON, DIV, DIV_ASSIGN, EQUAL, GE, GT, LAND, LE, LITERAL_ASSERT, LITERAL_CATCH, LITERAL_DO, LITERAL_ELSE, LITERAL_FINALLY, LITERAL_FOR, LITERAL_IF, LITERAL_RETURN, LITERAL_SYNCHRONIZED, LITERAL_TRY, LITERAL_WHILE, LOR, LT, MINUS, MINUS_ASSIGN, MOD, MOD_ASSIGN, NOT_EQUAL, PLUS, PLUS_ASSIGN, QUESTION, SL, SLIST, SL_ASSIGN, SR, SR_ASSIGN, STAR, STAR_ASSIGN, TYPE_EXTENSION_AND"/>
+        </module>
+        <module name="ModifierOrder"/>
+        <module name="RegexpSinglelineJava">
+            <property name="format" value="^(?&gt; *)[^&quot;]+  "/>
+            <property name="message" value="Double space not allowed"/>
+        </module>
+        <module name="AvoidNestedBlocks">
+            <property name="allowInSwitchCase" value="true"/>
+        </module>
+        <module name="RedundantModifier"/>
+        <module name="NeedBraces"/>
+        <module name="RightCurly"/>
+        <module name="LeftCurly"/>
+        <module name="EmptyBlock"/>
+        <module name="EmptyStatement"/>
+        <module name="EqualsHashCode"/>
+        <module name="HiddenField">
+            <property name="ignoreConstructorParameter" value="true"/>
+            <property name="ignoreSetter" value="true"/>
+        </module>
+        <module name="MissingSwitchDefault"/>
+        <module name="IllegalInstantiation"/>
+        <module name="FinalClass"/>
+        <module name="SimplifyBooleanExpression"/>
+        <module name="SimplifyBooleanReturn"/>
+        <!--module name="HideUtilityClassConstructor"/-->
+        <module name="UpperEll"/>
+        <module name="InterfaceIsType"/>
+        <module name="ArrayTypeStyle"/>
+        <module name="SuppressWarningsHolder"/>
+    </module>
+    <module name="RegexpMultiline">
+        <property name="format" value="\n\n\n"/>
+        <property name="message" value="Too many consecutive empty lines"/>
+        <property name="fileExtensions" value="java"/>
+    </module>
+</module>

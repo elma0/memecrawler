@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: cruncher
+  kafka:
+    bootstrap-servers: 192.168.0.104:9092
+    consumer:
+      bootstrap-servers: 192.168.0.104:9092
+      group-id: 0
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      bootstrap-servers: 192.168.0.104:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+data.mongodb:
+  url: mongodb://127.0.0.1:27017/?compressors=disabled&gssapiServiceName=mongodb
+
+reddit:
+  url: https://www.reddit.com/r/de/.json
+ninegag:
+  url: https://9gag.com/v1/group-posts/group/germany/type/hot
+awwmemes:
+  host: 216.239.36.21:443 #awwmemes.com:80
+  url: /ajax/tag_page/deutsch?since=1499859490,16753983,0
+
+management:
+  security:
+    enabled: false
+  port: 9000
