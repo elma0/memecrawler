@@ -25,6 +25,12 @@ awwmemes:
   host: 216.239.36.21:443 #awwmemes.com:80
   url: /ajax/tag_page/deutsch?since=1499859490,16753983,0
 
+logging:
+  level:
+    root: INFO
+    reactor: ERROR
+    org.springframework.web: ERROR
+
 management:
   security:
     enabled: false

@@ -28,6 +28,8 @@ import reactor.netty.http.client.HttpClient;
 @Service
 public class RedditStreamer implements Streamer {
     private static final Logger LOG = LoggerFactory.getLogger(RedditStreamer.class);
+    private static final int COUNT = 1000;
+    private static final int LIMIT = 100;
     private final BloomFilter<CharSequence> bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF-8")),
             1000_000_000L);
     private final HttpClient.ResponseReceiver<?> client;
@@ -53,29 +55,44 @@ public class RedditStreamer implements Streamer {
             return;
         }
         LOG.info("Reddit streamer started");
-        request(ImmutableMap.of("after", 1, "count", 1000, "show", "all", "limit", 100))
-                .whenComplete((response, throwable) -> processNext(response));
+        request(ImmutableMap.of("after", 1, "count", COUNT, "show", "all", "limit", LIMIT))
+                .whenComplete((response, throwable) ->
+                        processNext(Optional.ofNullable(LW.wrap(() -> parseContent(response)).data()).map(RedditData::after).orElse(null),
+                                0)
+                );
     }
 
-    private void processNext(String s) {
-        String next = Optional.ofNullable(LW.wrap(() -> parseContent(s)).data()).map(RedditData::after).orElse(null);
+    private void processNext(String next, int attempt) {
         if (next == null || next.isEmpty()) {
             isRunning.compareAndSet(true, false);
+            LOG.info("Job finished");
             return;
         }
-        request(ImmutableMap.of("after", next, "count", 1000, "show", "all", "limit", 100))
-                .whenComplete((response, throwable) -> processNext(response));
+        request(ImmutableMap.of("after", next, "count", COUNT, "show", "all", "limit", LIMIT))
+                .whenComplete((response, throwable) -> {
+                            if (throwable != null) {
+                                LOG.warn("Error requesting page content. Next attempt", throwable);
+                                if (attempt < 5) {
+                                    processNext(next, attempt + 1);
+                                } else {
+                                    LOG.error("Error requesting page content", throwable);
+                                }
+                            }
+                            processNext(Optional.ofNullable(LW.wrap(() -> parseContent(response)).data())
+                                    .map(RedditData::after).orElse(null), 0);
+                        }
+                );
     }
 
     public RedditContent parseContent(String contentAsString) throws JsonProcessingException {
         RedditContent content = om.readValue(contentAsString, RedditContent.class);
         if (content.data() != null && content.data().children() != null) {
             for (RedditContent childContent : content.data().children()) {
-                String url = childContent.data().url();
-                if (bloomFilter.mightContain(url)) {
+                String parsedUrl = childContent.data().url();
+                if (!bloomFilter.mightContain(parsedUrl)) {
                     kafkaTemplate.send(TOPIC, childContent.data().url());
                 }
-                bloomFilter.put(url);
+                bloomFilter.put(parsedUrl);
             }
         }
         return content;

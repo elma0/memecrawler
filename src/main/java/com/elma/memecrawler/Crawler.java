@@ -37,19 +37,28 @@ public class Crawler {
     public void consume(String message) {
         httpClient.uri(message)
                 .responseSingle((response, body) -> {
-                    if (response.responseHeaders().get("Content-Type").startsWith("image")) {
+                    String contentType = response.responseHeaders().get("Content-Type");
+                    if (contentType != null && contentType.startsWith("image")) {
                         return Mono.defer(body::asByteArray);
                     }
                     return Mono.empty();
                 }).toFuture()
                 .whenComplete((img, err) -> {
-                    if (img.length > 0) {
+                    if (err != null) {
+                        LOG.error("Error requesting file", err);
+                        return;
+                    }
+                    if (img != null && img.length > 0) {
                         int pos = message.lastIndexOf("/");
                         if (pos > 0) {
-                            Path p = Paths.get(message.substring(pos + 1));
+                            Path p = Paths.get("images", message.substring(pos + 1));
                             LW.wrap(() -> Files.write(p, img, StandardOpenOption.CREATE));
-                            imageRepo.insert(new ImageInfo(p.getFileName().toString(), p.toAbsolutePath().toString()));
-                            LOG.info("File {} written", p.toAbsolutePath());
+                            try {
+                                imageRepo.insert(new ImageInfo(p.getFileName().toString()));
+                            } catch (Exception e) {
+                                LOG.error("Error saving imgage", e);
+                            }
+                            LOG.trace("File {} written", p.toAbsolutePath());
                         }
                     }
                 });
