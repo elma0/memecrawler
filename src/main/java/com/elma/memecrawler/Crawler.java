@@ -54,6 +54,7 @@ public class Crawler {
                             Path p = Paths.get("images", message.substring(pos + 1));
                             LW.wrap(() -> Files.write(p, img, StandardOpenOption.CREATE));
                             try {
+                                // yes, it's blocking
                                 imageRepo.insert(new ImageInfo(p.getFileName().toString()));
                             } catch (Exception e) {
                                 LOG.error("Error saving imgage", e);
