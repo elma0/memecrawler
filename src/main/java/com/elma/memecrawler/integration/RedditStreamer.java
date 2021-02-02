@@ -1,22 +1,19 @@
 package com.elma.memecrawler.integration;
 
+import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import javax.annotation.Nullable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Service;
 
-import com.elma.memecrawler.common.LW;
+import com.elma.memecrawler.ImageConsumer;
 import com.elma.memecrawler.integration.model.RedditContent;
-import com.elma.memecrawler.integration.model.RedditData;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
@@ -25,7 +22,6 @@ import com.google.common.hash.Funnels;
 
 import reactor.netty.http.client.HttpClient;
 
-@Service
 public class RedditStreamer implements Streamer {
     private static final Logger LOG = LoggerFactory.getLogger(RedditStreamer.class);
     private static final int COUNT = 1000;
@@ -33,18 +29,18 @@ public class RedditStreamer implements Streamer {
     private final BloomFilter<CharSequence> bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF-8")),
             1000_000_000L);
     private final HttpClient.ResponseReceiver<?> client;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ImageConsumer consumer;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final ObjectMapper om;
     private final String url;
 
     public RedditStreamer(
-            @Qualifier("http.client") HttpClient.ResponseReceiver<?> client,
-            KafkaTemplate<String, String> kafkaTemplate,
-            @Value("${reddit.url}") String url,
+            HttpClient.ResponseReceiver<?> client,
+            ImageConsumer consumer,
+            String url,
             ObjectMapper om
     ) {
-        this.kafkaTemplate = kafkaTemplate;
+        this.consumer = consumer;
         this.client = client;
         this.url = url;
         this.om = om;
@@ -55,11 +51,7 @@ public class RedditStreamer implements Streamer {
             return;
         }
         LOG.info("Reddit streamer started");
-        request(ImmutableMap.of("after", 1, "count", COUNT, "show", "all", "limit", LIMIT))
-                .whenComplete((response, throwable) ->
-                        processNext(Optional.ofNullable(LW.wrap(() -> parseContent(response)).data()).map(RedditData::after).orElse(null),
-                                0)
-                );
+        request(payload("1")).whenComplete((response, throwable) -> processNext(parseContentAndGetNext(response), 0));
     }
 
     private void processNext(String next, int attempt) {
@@ -68,34 +60,41 @@ public class RedditStreamer implements Streamer {
             LOG.info("Job finished");
             return;
         }
-        request(ImmutableMap.of("after", next, "count", COUNT, "show", "all", "limit", LIMIT))
-                .whenComplete((response, throwable) -> {
-                            if (throwable != null) {
-                                LOG.warn("Error requesting page content. Next attempt", throwable);
-                                if (attempt < 5) {
-                                    processNext(next, attempt + 1);
-                                } else {
-                                    LOG.error("Error requesting page content", throwable);
-                                }
-                            }
-                            processNext(Optional.ofNullable(LW.wrap(() -> parseContent(response)).data())
-                                    .map(RedditData::after).orElse(null), 0);
-                        }
-                );
+        CompletableFuture<String> f = request(payload(next));
+        f.whenComplete((response, throwable) -> {
+                    if (throwable == null) {
+                        processNext(parseContentAndGetNext(response), 0);
+                    }
+                    LOG.warn("Page content requesting error. Next attempt", throwable);
+                    if (attempt < 5) {
+                        processNext(next, attempt + 1);
+                    } else {
+                        LOG.error("Page content requesting error", throwable);
+                    }
+                }
+        );
     }
 
-    public RedditContent parseContent(String contentAsString) throws JsonProcessingException {
-        RedditContent content = om.readValue(contentAsString, RedditContent.class);
-        if (content.data() != null && content.data().children() != null) {
-            for (RedditContent childContent : content.data().children()) {
-                String parsedUrl = childContent.data().url();
-                if (!bloomFilter.mightContain(parsedUrl)) {
-                    kafkaTemplate.send(TOPIC, childContent.data().url());
-                }
-                bloomFilter.put(parsedUrl);
-            }
+    @Nullable
+    public String parseContentAndGetNext(String contentAsString) {
+        RedditContent content;
+        try {
+            content = om.readValue(contentAsString, RedditContent.class);
+        } catch (JsonProcessingException e) {
+            LOG.error("Invalid page content", e);
+            return null;
         }
-        return content;
+        if (content.data() == null || content.data().children() == null) {
+            return null;
+        }
+        for (RedditContent childContent : content.data().children()) {
+            String parsedUrl = childContent.data().url();
+            if (!bloomFilter.mightContain(parsedUrl)) {
+                consumer.onImage(parsedUrl);
+            }
+            bloomFilter.put(parsedUrl);
+        }
+        return content.data().after();
     }
 
     private CompletableFuture<String> request(Map<String, ?> params) {
@@ -103,6 +102,10 @@ public class RedditStreamer implements Streamer {
                 .responseSingle((response, body) -> body.asString())
                 .log()
                 .toFuture();
+    }
+
+    private ImmutableMap<String, ? extends Serializable> payload(String page) {
+        return ImmutableMap.of("after", page, "count", COUNT, "show", "all", "limit", LIMIT);
     }
 
     public String asString(Map<String, ?> params) {
